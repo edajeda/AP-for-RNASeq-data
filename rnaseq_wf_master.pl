@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-#Master scripts for analysing rnaseq data from Illumina pipleine using tophat. The program performs QC in FASTQC, aligns reads to human genome using Tophat program and generates read counts using htseqCount.
+#Master scripts for analysing rnaseq data from Illumina pipleine using tophat. The program performs QC in FASTQC, aligns reads to human genome using Tophat program, generates read counts using htseqCount and rpkmforgenes as well as rpkm values.
 #Copyright 2011 Henrik Stranneheim
 
 =head1 SYNOPSIS
@@ -48,6 +48,18 @@ rnaseq_wf_master.pl  -id [indir...n] -a [project ID] -s [sample ID...n] -em [e-m
 
 -nrcond2DES/--nrcondtwo DESeq number of conditions two (Must be supplied to run DESeq)
 
+-pDESR/--deseq Flag for running corr_boxp_venn.1.0.R (defaults to yes (=1))
+
+-condid1DESR/--condition id one (defaults to cond_1)
+
+-condid2DESR/--condidition id two (defaults to cond_2)
+
+-pCRCO/--comp_rpkm_cut_off Flag for running comp_rpkm_cut_off_wf.1.0.pl (defaults to yes (=1))
+
+-nrrep1/--nrreplicates1 comp_rpkm_cut_off number of replicates one (Must be supplied to run nrrep1)
+
+-nrrep2/--nrreplicates2 comp_rpkm_cut_off number of replicates two (Must be supplied to run nrrep2)
+
 =head3 I/O
 
 Input format ( dir/infiles.fastq )
@@ -81,13 +93,19 @@ BEGIN {
 	       -pDES/--deseq Flag for running DESeq (defaults to yes (=1))
 	       -sidDES/--deseqsampleid DESeq sample id (defaults to deseq)
 	       -nrcond1DES/--nrcondone DESeq number of conditions one (Must be supplied to run DESeq)
-	       -nrcond2DES/--nrcondtwo DESeq number of conditions two (Must be supplied to run DESeq)	  
+	       -nrcond2DES/--nrcondtwo DESeq number of conditions two (Must be supplied to run DESeq)
+	       -pDESR/--deseq Flag for running corr_boxp_venn.1.0.R (defaults to yes (=1))
+	       -condid1DESR/--condition id one (defaults to cond_1)
+	       -condid2DESR/--condidition id two (defaults to cond_2)
+	       -pCRCO/--comp_rpkm_cut_off Flag for running comp_rpkm_cut_off_wf.1.0.pl (defaults to yes (=1))
+	       -nrrep1/--nrreplicates1 comp_rpkm_cut_off number of replicates one (Must be supplied to run nrrep1)
+	       -nrrep2/--nrreplicates2 comp_rpkm_cut_off number of replicates two (Must be supplied to run nrrep2)
 	   };
     
 }
 
-my ($aid,$em,$odf,$ods,$fnend,$ochtsc, $sidDES, $nrcond1DES, $nrcond2DES, $schtsc, $filename, $filename2, $fnt, $fnt2,$help) = (0,0,"data", "wf_scripts", ".sh", "concat_htseqCount_wf.txt", "deseq"); #Arguments for project
-my ($pFQC, $pTH, $pSTV, $pHTSC, $pRPKM, $pCHTSC, $pDES) = (1, 1, 1, 1, 1, 1, 1); #Arguments for running programs
+my ($aid,$em,$odf,$ods,$fnend,$ochtsc, $sidDES, $condid1DESR, $condid2DESR, $nrcond1DES, $nrcond2DES, $schtsc, $nrrep1, $nrrep2, $filename, $filename2, $fnt, $fnt2,$help) = (0,0,"data", "wf_scripts", ".sh", "concat_htseqCount_wf.txt", "deseq", "cond_1", "cond_2"); #Arguments for project
+my ($pFQC, $pTH, $pSTV, $pHTSC, $pRPKM, $pCHTSC, $pDES, $pDESR, $pCRCO) = (1, 1, 1, 1, 1, 1, 1, 1, 1); #Arguments for running programs
 my (@inid,@sid, @refchr, @sidhtseq); #infiledir, sampleid (dir) ,reference annotaion, sampleid (ind)
 my (%infiles);
 
@@ -109,6 +127,12 @@ GetOptions('id|infiledir:s'  => \@inid, #Comma separeted list
 	   'sidDES|sampleiddes:s' => \$sidDES, #sample id for sample vs sample
 	   'nrcond1DES|nrcondonedes:s' => \$nrcond1DES, #sample id for sample vs sample
 	   'nrcond2DES|nrcondtwodes:s' => \$nrcond2DES, #sample id for sample vs sample
+	   'pDESR|corr_boxp_venn:n' => \$pDESR,
+	   'condid1DESR|condidone:s' => \$condid1DESR, #condition 1
+	   'condid2DESR|condidtwo:s' => \$condid1DESR, #condition 2
+	   'pCRCO|comp_rpkmcf:n' => \$pCRCO,
+	   'nrrep1|nrrep1cond1:n' => \$nrrep1, #nr of replicates cond 1 comp_rpkm_cut_off
+	   'nrrep2|nrrep2cond2:n' => \$nrrep2, #nr of replicates cond 2 comp_rpkm_cut_off
 	   'h|help' => \$help,
 	   );
 
@@ -154,7 +178,17 @@ for (my $inputdir=0;$inputdir<scalar(@inid);$inputdir++) { #Collects inputfiles
  
 }
 
-
+@refchr = `head -n 1 /bubo/proj/$aid/private/$ods/references/concat.fa.fa`; #Check for chr1 or simply 1 for adjusting reference
+#shift @refchr; #Removes header from array
+my $ref=0;
+for (my $pos=0;$pos<scalar(@refchr);$pos++) { #All headers (should not matter) and positions
+    
+    if($refchr[$pos] =~ /chr/) { #Adjust reference for chr or simply 1
+	
+	$ref = 1;
+	$pos = scalar(@refchr);
+    }
+}
 
 #########################
 ###Run program part######
@@ -201,7 +235,7 @@ if ($pSTV eq 1) { #Run Samtools view
     }
 }
 
-if ($pTH eq 1) { #Run HTSeqCount 
+if ($pHTSC eq 1) { #Run HTSeqCount 
 
     print STDERR "\nHTSeqCount", "\n";
     print STDERR "Creating sbatch script HTSeqCount and writing script file(s) to: ", $ods,"/sampleid/htseq/htseqCount_wf_sampleid.sh", "\n";
@@ -209,7 +243,7 @@ if ($pTH eq 1) { #Run HTSeqCount
     
     for (my $sampleid=0;$sampleid<scalar(@sid);$sampleid++) {  
     
-	Htseqcount($sid[$sampleid]);
+	Htseqcount($sid[$sampleid], $sampleid);
 	
     }
 
@@ -224,7 +258,7 @@ if ($pRPKM eq 1) { #Run Rpkmforgenes and cut_off.1.0.R
 
     for (my $sampleid=0;$sampleid<scalar(@sid);$sampleid++) {  
     
-	Rpkmforgenes($sid[$sampleid]);
+	Rpkmforgenes($sid[$sampleid], $sampleid);
 	
     }
 }
@@ -239,28 +273,182 @@ if ($pCHTSC eq 1) { #Run concat_htseqCounts_wf.1.0.pl
 	Concat_htseqCD();
 }
 
-if ($pDES eq 1) { #Run Deseq_script_1_0.R 
+if ($pDES eq 1) { #Run deseq.1.1.R 
 
-    print STDERR "\nDeseq_script_1_0.R", "\n";
-    print STDERR "Creating sbatch script deseq_wf and writing script file(s) to: ", $ods,"/deseq/deseq_wf.sh", "\n";
+    print STDERR "\nDeseq.1.1.R", "\n";
+    print STDERR "Creating sbatch script deseq_wf and writing script file(s) to: ", $ods,"/deseq/deseq.1.1_wf.sh", "\n";
     print STDERR "Sbatch script deseq_wf data files will be written to: ", $odf,"/deseq/filename", "\n";
 
     
-	DESeq(); #NOTE: package DESeq and gplots are not installed on uppmax as yet
+	DESeq(); #NOTE: You need to install DESeq and gplots before running R on uppmax: Start an R session and type
+#source("http://www.bioconductor.org/biocLite.R")
+#biocLite("DESeq")
+}
+
+if ($pDESR eq 1) { #corr_boxp_venn.1.0.R 
+
+    print STDERR "\nCorr_boxp_venn.1.0.R", "\n";
+    print STDERR "Creating sbatch script corr_boxp_venn.1.0_wf and writing script file(s) to: ", $ods,"/corr_boxp_venn/corr_boxp_venn.1.0_wf.sh", "\n";
+    print STDERR "Sbatch script corr_boxp_venn.1.0_wf data files will be written to: ", $odf,"/corr_boxp_venn/filename", "\n";
+
+    
+	DESR(); #NOTE: You need to install gplots before running R on uppmax: Start an R session and type
+#install.packages("gplots")
+
+}
+if ($pCRCO eq 1) { #comp_rpkm_cut_off_wf.1.0.pl
+
+    print STDERR "\nComp_rpkm_cut_off_wf.1.0.pl", "\n";
+    print STDERR "Creating sbatch script comp_rpkm_cut_off.1.0_wf and writing script file(s) to: ", $ods,"/comp_rpkm_cut_off/comp_rpkm_cut_off.1.0_wf.sh", "\n";
+    print STDERR "Sbatch script comp_rpkm_cut_off_wf data files will be written to: ", $odf,"/comp_rpkm_cut_off/filename", "\n";
+
+	Crpkmco(); 
+
 }
 
 ######################
 ###Sub Routines#######
 ######################
 
+sub Crpkmco { 
+    
+#Generates a sbatch script and to run comp_rpkm_cut_off_wf.1.0.pl
+    
+    `mkdir -p $odf/comp_rpkm_cut_off/info;`; #Creates the comp_rpkm_cut_off and info data file directory
+    `mkdir -p $ods/comp_rpkm_cut_off;`; #Creates the deseq script directory
+    
+    $filename = "/bubo/proj/$aid/private/$ods/comp_rpkm_cut_off/comp_rpkm_cut_off.1.0_wf.";
+    Checkfnexists($filename, $fnend);
+
+    open (CRCO, ">$filename") or die "Can't write to $filename: $!\n";
+    
+    print CRCO "#! /bin/bash -l", "\n";
+    print CRCO "#SBATCH -A ", $aid, "\n";
+    print CRCO "#SBATCH -t 00:10:00", "\n"; 
+    print CRCO "#SBATCH -J CRCO", "\n";
+    print CRCO "#SBATCH -n 1 ", "\n";
+    print CRCO "#SBATCH -e $odf/comp_rpkm_cut_off/info/comp_rpkm_cut_off.1.0.R_wf.", $fnt ,".stderr.txt", "\n";
+    print CRCO "#SBATCH -o $odf/comp_rpkm_cut_off/info/comp_rpkm_cut_off.1.0.R_wf.", $fnt ,".stdout.txt", "\n";
+    
+    unless ($em eq 0) {
+	
+	print CRCO "#SBATCH --mail-type=All", "\n";
+	print CRCO "#SBATCH --mail-user=$em", "\n\n";
+	
+    }
+    
+    print CRCO 'echo "Running on: $(hostname)"',"\n\n";
+    print CRCO "#Samples", "\n";
+    print CRCO 'outSampleDir="', "/bubo/proj/$aid/private/$odf/comp_rpkm_cut_off", '"', "\n\n";
+    print CRCO "perl /bubo/proj/$aid/private/$ods/comp_rpkm_cut_off_wf.1.0.pl -i ";
+    
+    for (my $sampleid=0;$sampleid<scalar(@sid);$sampleid++) { 
+	
+	$_[0] = $sid[$sampleid];
+	
+	for (my $infile=0;$infile<scalar( @{ $infiles{$_[0]} });$infile++) {
+	    
+	    my $tempinfile = $infiles{$_[0]}[$infile];
+	    chomp $tempinfile; #Removing "\n";
+	   
+	    if ($infile eq scalar( @{ $infiles{$_[0]} })-1 && $sampleid eq scalar(@sid)-1) { #Last file and last sampleid
+		
+		print CRCO "/bubo/proj/$aid/private/$odf/$_[0]/rpkmforgenes/$tempinfile", "_ref_rpkmout.txt ";	
+	    }
+	    else {
+		
+		print CRCO "/bubo/proj/$aid/private/$odf/$_[0]/rpkmforgenes/$tempinfile", "_ref_rpkmout.txt,";
+	    }
+	}
+    }
+    print CRCO "-icf ";
+    for (my $sampleid=0;$sampleid<scalar(@sid);$sampleid++) { 
+	
+	$_[0] = $sid[$sampleid];
+	
+	for (my $infile=0;$infile<scalar( @{ $infiles{$_[0]} });$infile++) {
+	    
+	    my $tempinfile = $infiles{$_[0]}[$infile];
+	    chomp $tempinfile; #Removing "\n";
+	    
+	    if ($infile eq scalar( @{ $infiles{$_[0]} })-1 && $sampleid eq scalar(@sid)-1) { #Last file and last sampleid
+		print CRCO "/bubo/proj/$aid/private/$odf/$_[0]/rpkmforgenes/$tempinfile", "_cut_off.1.0_out.txt ";	
+	    }
+	    else {
+		
+		print CRCO "/bubo/proj/$aid/private/$odf/$_[0]/rpkmforgenes/$tempinfile", "_cut_off.1.0_out.txt,";
+	    }
+	}
+    }
+    print CRCO "-s ";
+    for (my $sidhtseqc=0;$sidhtseqc<scalar(@sidhtseq);$sidhtseqc++) {
+	
+	if ($sidhtseqc eq scalar(@sidhtseq)-1) {
+	    
+	    print CRCO "$sidhtseq[$sidhtseqc] ";
+	}
+	else {
+	    
+	    print CRCO "$sidhtseq[$sidhtseqc],";
+	}
+    }
+    print CRCO "-nrrep1 $nrrep1 -nrrep2 $nrrep2 -oall ", '${outSampleDir}', "/comp_rpkm_cut_off_pfcf_wf.txt -opid ", '${outSampleDir}', "/comp_rpkm_cut_off_passcf_wf.txt", "\n\n";
+    print CRCO "wait", "\n";
+    close(CRCO);
+    return;
+    
+}
+
+sub DESR { 
+    
+#Generates a sbatch script and to run  corr_boxp_venn.1.0.R
+    
+    `mkdir -p $odf/corr_boxp_venn/info;`; #Creates the deseq and info data file directory
+    `mkdir -p $ods/corr_boxp_venn;`; #Creates the deseq script directory
+    
+    $filename = "/bubo/proj/$aid/private/$ods/corr_boxp_venn/corr_boxp_venn.1.0_wf.";
+    Checkfnexists($filename, $fnend);
+
+    open (DESR, ">$filename") or die "Can't write to $filename: $!\n";
+    
+    print DESR "#! /bin/bash -l", "\n";
+    print DESR "#SBATCH -A ", $aid, "\n";
+    print DESR "#SBATCH -t 00:10:00", "\n"; 
+    print DESR "#SBATCH -J DESR", "\n";
+    print DESR "#SBATCH -n 1 ", "\n";
+    print DESR "#SBATCH -e $odf/corr_boxp_venn/info/corr_boxp_venn.1.0.R_wf.", $fnt ,".stderr.txt", "\n";
+    print DESR "#SBATCH -o $odf/corr_boxp_venn/info/corr_boxp_venn.1.0.R_wf.", $fnt ,".stdout.txt", "\n";
+    
+    unless ($em eq 0) {
+	
+	print DESR "#SBATCH --mail-type=All", "\n";
+	print DESR "#SBATCH --mail-user=$em", "\n\n";
+	
+    }
+    
+    print DESR 'echo "Running on: $(hostname)"',"\n\n";
+    print DESR "module add bioinfo-tools", "\n";
+    print DESR "module load R/2.12.2", "\n";
+    print DESR "#Samples", "\n";
+    print DESR 'inSampleDir="', "/bubo/proj/$aid/private/$odf/concat_htseqc", '"', "\n\n";
+    print DESR 'outSampleDir="', "/bubo/proj/$aid/private/$odf/deseq", '"', "\n\n"; #deseq dir is created in r script
+    
+    print DESR "Rscript /bubo/proj/$aid/private/$ods/corr_boxp_venn.1.0.R ",'${inSampleDir}', "/$ochtsc", " $condid1DESR $condid2DESR $nrcond1DES $nrcond2DES 0.03 ", '${outSampleDir}', "\n\n"; #0.03 should be changed to cut-off or removed and all genes below cut off removed before running script
+    
+    print DESR "wait", "\n";
+    close(DESR);
+    return;
+    
+}
+
 sub DESeq { 
     
 #Generates a sbatch script and to run DESEQ
     
-    `mkdir -p $odf/deseq/info;`; #Creates the htseq and info data file directory
-    `mkdir -p $ods/deseq;`; #Creates the concat_htseqCounts_wf.1.0.pl script directory
+    `mkdir -p $odf/deseq/info;`; #Creates the deseq and info data file directory
+    `mkdir -p $ods/deseq;`; #Creates the deseq script directory
     
-    $filename = "/bubo/proj/$aid/private/$ods/deseq/deseq_wf.";
+    $filename = "/bubo/proj/$aid/private/$ods/deseq/deseq.1.1_wf.";
     Checkfnexists($filename, $fnend);
 
     open (DES, ">$filename") or die "Can't write to $filename: $!\n";
@@ -270,8 +458,8 @@ sub DESeq {
     print DES "#SBATCH -t 00:10:00", "\n"; 
     print DES "#SBATCH -J DES", "\n";
     print DES "#SBATCH -n 1 ", "\n";
-    print DES "#SBATCH -e $odf/deseq/info/deseq_wf.", $fnt ,".stderr.txt", "\n";
-    print DES "#SBATCH -o $odf/deseq/info/deseq_wf.", $fnt ,".stdout.txt", "\n";
+    print DES "#SBATCH -e $odf/deseq/info/deseq.1.1_wf.", $fnt ,".stderr.txt", "\n";
+    print DES "#SBATCH -o $odf/deseq/info/deseq.1.1_wf.", $fnt ,".stdout.txt", "\n";
     
     unless ($em eq 0) {
 	
@@ -285,9 +473,9 @@ sub DESeq {
     print DES "module load R/2.12.2", "\n";
     print DES "#Samples", "\n";
     print DES 'inSampleDir="', "/bubo/proj/$aid/private/$odf/concat_htseqc", '"', "\n\n";
-    print DES 'outSampleDir="', "/bubo/proj/$aid/private/$odf", '"', "\n\n"; #Deseq dir is created in r script
+    print DES 'outSampleDir="', "/bubo/proj/$aid/private/$odf", '"', "\n\n"; #deseq dir is created in r script
     
-    print DES "Rscript /bubo/proj/$aid/private/$ods/Deseq_script.R ",'${inSampleDir}', "/$ochtsc", " $sidDES $nrcond1DES $nrcond2DES 0.05 ", '${outSampleDir}', "/$ochtsc";
+    print DES "Rscript /bubo/proj/$aid/private/$ods/deseq.1.1.R ",'${inSampleDir}', "/$ochtsc", " $sidDES $nrcond1DES $nrcond2DES 0.05 ", '${outSampleDir}', "\n\n";
     
     print DES "wait", "\n";
     close(DES);
@@ -338,11 +526,11 @@ sub Concat_htseqCD {
 	   
 	    if ($infile eq scalar( @{ $infiles{$_[0]} })-1 && $sampleid eq scalar(@sid)-1) { #Last file and last sampleid
 		
-		print CHTSC "/bubo/proj/$aid/private/$odf/$_[0]/htseq/htseqCounts_$tempinfile.txt ";	
+		print CHTSC "/bubo/proj/$aid/private/$odf/$_[0]/htseq/htseqCounts_ensid_$tempinfile.txt ";	
 	    }
 	    else {
 		
-		print CHTSC "/bubo/proj/$aid/private/$odf/$_[0]/htseq/htseqCounts_$tempinfile.txt,";
+		print CHTSC "/bubo/proj/$aid/private/$odf/$_[0]/htseq/htseqCounts_ensid_$tempinfile.txt,";
 	    }
 	}
     }
@@ -359,7 +547,25 @@ sub Concat_htseqCD {
 	}
     }
     print CHTSC "-o ", '${outSampleDir}', "/$ochtsc", "\n\n";
-    print CHTSC "wait", "\n";
+    print CHTSC "wait", "\n\n";
+    if ($pDES eq 1) { #If run DES
+
+	print CHTSC "cd /bubo/proj/$aid/private/", "\n\n"; #Required for next steps
+
+	$filename2 = "/bubo/proj/$aid/private/$ods/deseq/deseq.1.1_wf.";
+	Checkfn2exists($filename2, $fnend);
+	print CHTSC "sbatch $filename2","\n\n";
+	print CHTSC "wait", "\n\n";
+    }
+    if ($pDESR eq 1) { #If run corr_boxp_venn.1.0.R
+
+	print CHTSC "cd /bubo/proj/$aid/private/", "\n\n"; #Required for next steps
+     
+	$filename2 = "/bubo/proj/$aid/private/$ods/corr_boxp_venn/corr_boxp_venn.1.0_wf.";
+	Checkfn2exists($filename2, $fnend);
+	print CHTSC "sbatch $filename2","\n\n";
+	print CHTSC "wait", "\n\n";
+    }
     close(CHTSC);
     return;
     
@@ -370,6 +576,7 @@ sub Rpkmforgenes {
     
 #Generates sbatch scripts and runs Rpkmforgenes
 #$_[0] = sampleid
+#$_[1] =  nr $sampleid
     
     `mkdir -p $odf/$_[0]/rpkmforgenes/info;`; #Creates the rpkmforgenes and info data file directory
     `mkdir -p $ods/$_[0]/rpkmforgenes;`; #Creates the rpkmforgenes script directory
@@ -400,8 +607,18 @@ sub Rpkmforgenes {
     print RPKM "module load python/2.6.6", "\n";
     print RPKM "module load samtools/0.1.8", "\n\n";
     print RPKM "module load R/2.12.2", "\n\n";
-    print RPKM "#Annotationfile","\n";
-    print RPKM 'annotation_backg="', "/bubo/proj/$aid/private/$ods/references/background_hg19_noest.gtf",'"', "\n\n";
+   
+    if ($ref eq 1) {
+	    print RPKM "#Annotationfile","\n";
+	    print RPKM 'annotation_backg="', "/bubo/proj/$aid/private/$ods/references/background_hg19_chr_noest.gtf",'"', "\n\n";
+	    print RPKM 'annotation="', "/bubo/proj/$aid/private/$ods/references/refseq_hg19_rm_chr.gtf",'"', "\n\n";
+	}
+    else {
+	print RPKM "#Annotationfile","\n";
+	print RPKM 'annotation_backg="', "/bubo/proj/$aid/private/$ods/references/background_hg19_noest.gtf",'"', "\n\n";
+	print RPKM 'annotation="', "/bubo/proj/$aid/private/$ods/references/refseq_hg19_rm.gtf",'"', "\n\n";
+    }
+    
     print RPKM "#Samples", "\n";
     print RPKM 'outSampleDir="', "/bubo/proj/$aid/private/$odf/$_[0]/rpkmforgenes", '"', "\n";
     
@@ -418,24 +635,6 @@ sub Rpkmforgenes {
 	chomp $tempinfile; #Removing "\n";
 	print RPKM 'inSampleDir="',"/bubo/proj/$aid/private/$odf/$_[0]/tophat/$infile.$fnt", '"', "\n\n";
 	
-	@refchr = `head -n 1 /bubo/proj/$aid/private/$ods/references/concat.fa.fa`; #Check for chr1 or simply 1 for adjusting reference
-	#shift @refchr; #Removes header from array
-	my $ref=0;
-	for (my $pos=0;$pos<scalar(@refchr);$pos++) { #All headers (should not matter) and positions
-	    
-	    if($refchr[$pos] =~ /chr/) { #Adjust reference for chr or simply 1
-		
-		$ref = 1;
-		$pos = scalar(@refchr);
-	    }
-	}
-	if ($ref eq 1) {
-	    print RPKM 'annotation="', "/bubo/proj/$aid/private/$ods/references/refGene-hg19.gtf",'"', "\n\n";
-	}
-	else {
-	    
-	    print RPKM 'annotation="', "/bubo/proj/$aid/private/$ods/references/refGene_no_chr-hg19.gtf",'"', "\n\n";
-	}
 	print RPKM "python /bubo/proj/$aid/private/$ods/rpkmforgenes.2.0.py -sam -gffann -readcount -i ", '${inSampleDir}', "/accepted_hits.sam -o ", '${outSampleDir}',"/$tempinfile", "_refg_background_rpkmout.txt -a ", '${annotation_backg}', " & \n\n";
 	print RPKM "python /bubo/proj/$aid/private/$ods/rpkmforgenes.2.0.py -sam -readcount -i ", '${inSampleDir}', "/accepted_hits.sam -o ", '${outSampleDir}',"/$tempinfile", "_ref_rpkmout.txt -a ", '${annotation}', " & \n\n";
 	$allp=$allp+2; #Two commands at once
@@ -457,7 +656,20 @@ sub Rpkmforgenes {
 	print RPKM "Rscript /bubo/proj/$aid/private/$ods/cut_off.1.0.R ", '${outSampleDir}', "/$tempinfile", "_refg_background_rpkmout.txt ", '${outSampleDir}', "/$tempinfile", "_ref_rpkmout.txt $tempinfile > ", '${outSampleDir}', "/$tempinfile", "_cut_off.1.0_out.txt &", "\n\n";
 
     }
-    print RPKM "wait", "\n";
+    print RPKM "wait", "\n\n";
+
+    if ($_[1] eq scalar(@sid)-1) {
+	
+	if ($pCRCO eq 1) { #If run comp_rpkm_cut_off_wf.1.0.pl
+	    
+	    print RPKM "cd /bubo/proj/$aid/private/", "\n\n"; #Required for next steps
+	    
+	    $filename2 = "/bubo/proj/$aid/private/$ods/comp_rpkm_cut_off/comp_rpkm_cut_off.1.0_wf.";
+	    Checkfn2exists($filename2, $fnend);
+	    print RPKM "sbatch $filename2","\n\n";
+	    print RPKM "wait", "\n\n";
+	}    
+    }
     close(RPKM);
     return;
     
@@ -468,7 +680,8 @@ sub Htseqcount {
     
 #Generates a sbatch script and runs HTSeqCount
 #$_[0] = sampleid
-    
+#$_[1] =  nr $sampleid
+
     `mkdir -p $odf/$_[0]/htseq/info;`; #Creates the htseq and info data file directory
     `mkdir -p $ods/$_[0]/htseq;`; #Creates the htseq script directory
     
@@ -498,8 +711,16 @@ sub Htseqcount {
     print HTSC "module load python/2.6.6", "\n";
     print HTSC "module load htseq/0.4.6", "\n";
     print HTSC "module load samtools/0.1.8", "\n\n";
-    print HTSC "#Annotationfile","\n";
-    print HTSC 'annotation="', "/bubo/proj/$aid/private/$ods/references/Homo_sapiens.GRCh37.59.gtf",'"', "\n\n";
+    
+    if ($ref eq 1) { #Reference contains chr1
+	    print HTSC "#Annotationfile","\n";
+	    print HTSC 'annotation="', "/bubo/proj/$aid/private/$ods/references/Homo_sapiens.GRCh37.59_chr.gtf",'"', "\n\n";
+	}
+    else { #Reference contains simply 1
+	    print HTSC "#Annotationfile","\n";
+	    print HTSC 'annotation="', "/bubo/proj/$aid/private/$ods/references/Homo_sapiens.GRCh37.59.gtf",'"', "\n\n";
+    }
+   
     print HTSC "#Samples", "\n";
     print HTSC 'outSampleDir_htsc="', "/bubo/proj/$aid/private/$odf/$_[0]/htseq", '"', "\n\n";
     
@@ -516,9 +737,48 @@ sub Htseqcount {
 	chomp $tempinfile; #Removing "\n";
 	print HTSC 'inSampleDir="',"/bubo/proj/$aid/private/$odf/$_[0]/tophat/$infile.$fnt", '"', "\n";
 	print HTSC "cd /bubo/proj/$aid/private/$odf/$_[0]/tophat/$infile.$fnt", "\n\n";
-	print HTSC "python -m HTSeq.scripts.count -m intersection-strict -s no -t exon -i gene_id ", '${inSampleDir}', "/accepted_hits.sam ", '${annotation}', " > ", '${outSampleDir_htsc}', "/htseqCounts_$tempinfile.txt &", "\n\n";	
+	print HTSC "python -m HTSeq.scripts.count -m intersection-strict -s no -t exon -i gene_id ", '${inSampleDir}', "/accepted_hits.sam ", '${annotation}', " > ", '${outSampleDir_htsc}', "/htseqCounts_ensid_$tempinfile.txt &", "\n\n";	
+    }
+    print HTSC "wait", "\n\n";
+    
+    if ($ref eq 1) { #Reference contains chr1
+	print HTSC "#Annotationfile","\n";
+	print HTSC 'annotation="', "/bubo/proj/$aid/private/$ods/references/refGene-hg19_2_chr_rm.gtf",'"', "\n\n";
+    }
+    else { #Reference contains simply 1
+	print HTSC "#Annotationfile","\n";
+	print HTSC 'annotation="', "/bubo/proj/$aid/private/$ods/references/refGene-hg19_2_rm.gtf",'"', "\n\n";
+    }
+
+    $k=1;
+    for (my $infile=0;$infile<scalar( @{ $infiles{$_[0]} });$infile++) {
+	
+	if ($infile eq $k*8) { #Using only 8 cores
+	    
+	    print HTSC "wait", "\n";
+	    $k=$k+1;
+	}
+	my $tempinfile = $infiles{$_[0]}[$infile];
+	chomp $tempinfile; #Removing "\n";
+	print HTSC 'inSampleDir="',"/bubo/proj/$aid/private/$odf/$_[0]/tophat/$infile.$fnt", '"', "\n";
+	print HTSC "cd /bubo/proj/$aid/private/$odf/$_[0]/tophat/$infile.$fnt", "\n\n";
+	print HTSC "python -m HTSeq.scripts.count -m intersection-strict -s no -t exon -i gene_id ", '${inSampleDir}', "/accepted_hits.sam ", '${annotation}', " > ", '${outSampleDir_htsc}', "/htseqCounts_refid_$tempinfile.txt &", "\n\n";	
     }
     print HTSC "wait", "\n";
+    
+    if ($_[1] eq scalar(@sid)-1) {
+	
+	if ($pCHTSC eq 1) { #If run concat_htseqCounts_wf.1.0.pl
+	    
+	    print HTSC "cd /bubo/proj/$aid/private/", "\n\n"; #Required for next steps
+	    
+	    $filename2 = "/bubo/proj/$aid/private/$ods/concat_htseqc/concat_htseqc_wf.";
+	    Checkfn2exists($filename2, $fnend);
+	    print HTSC "sbatch $filename2","\n\n";
+	    print HTSC "wait", "\n\n";
+	}    
+    }
+    
     close(HTSC);
     return;
     
@@ -556,7 +816,6 @@ sub Samtoolsview {
     print STV 'echo "Running on: $(hostname)"',"\n\n";
     print STV "module add bioinfo-tools", "\n";
     print STV "module load samtools/0.1.8", "\n\n";
-    print STV "#Annotationfile","\n";
     print STV "#Samples", "\n";
     
     my $k=1;
@@ -650,9 +909,14 @@ sub Tophat {
 
 	print TH "#Reference", "\n";
 	print TH 'reference="', "/bubo/proj/$aid/private/$ods/references/concat.fa",'"', "\n\n";
-
-	print TH "#Annotationfile","\n";
-	print TH 'annotation="', "/bubo/proj/$aid/private/$ods/references/Homo_sapiens.GRCh37.59.gtf",'"', "\n\n"; 
+	if ($ref eq 1) { #Reference contains chr1
+	    print TH "#Annotationfile","\n";
+	    print TH 'annotation="', "/bubo/proj/$aid/private/$ods/references/Homo_sapiens.GRCh37.59_chr.gtf",'"', "\n\n";
+	}
+	else { #Reference contains simply 1
+	    print TH "#Annotationfile","\n";
+	    print TH 'annotation="', "/bubo/proj/$aid/private/$ods/references/Homo_sapiens.GRCh37.59.gtf",'"', "\n\n";
+	}
 
 	print TH "#Samples", "\n";
 	print TH 'inSampleDir="',"/bubo/proj/$aid/private/$odf/$_[0]/fastq", '"', "\n";
