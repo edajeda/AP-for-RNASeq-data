@@ -589,7 +589,7 @@ sub Rpkmforgenes {
     
     print RPKM "#! /bin/bash -l", "\n";
     print RPKM "#SBATCH -A ", $aid, "\n";
-    print RPKM "#SBATCH -t 1:00:00", "\n";
+    print RPKM "#SBATCH -t $t:00:00", "\n";
     print RPKM "#SBATCH -J RPKM", $_[0], "\n";
     print RPKM "#SBATCH -p node -n 8 ", "\n";
     print RPKM "#SBATCH -e $odf/$_[0]/rpkmforgenes/info/rpkmForGenes2.0_wf_$_[0].", $fnt, ".stderr.txt", "\n";
@@ -693,7 +693,7 @@ sub Htseqcount {
     
     print HTSC "#! /bin/bash -l", "\n";
     print HTSC "#SBATCH -A ", $aid, "\n";
-    print HTSC "#SBATCH -t 1:00:00", "\n"; ##SBATCH -t $t:00:00", "\n";
+    print HTSC "#SBATCH -t $t:00:00", "\n"; ##SBATCH -t $t:00:00", "\n";
     print HTSC "#SBATCH -J HTSC", $_[0], "\n";
     print HTSC "#SBATCH -p node -n 8 ", "\n";
     print HTSC "#SBATCH -e $odf/$_[0]/htseq/info/htseqCount_wf_$_[0].", $fnt ,".stderr.txt", "\n";
@@ -800,7 +800,7 @@ sub Samtoolsview {
     
     print STV "#! /bin/bash -l", "\n";
     print STV "#SBATCH -A ", $aid, "\n";
-    print STV "#SBATCH -t 1:00:00", "\n"; ##SBATCH -t $t:00:00", "\n";
+    print STV "#SBATCH -t $t:00:00", "\n"; 
     print STV "#SBATCH -J STV", $_[0], "\n";
     print STV "#SBATCH -p node -n 8 ", "\n";
     print STV "#SBATCH -e $odf/$_[0]/tophat/info/samtools_view_wf_$_[0].", $fnt ,".stderr.txt", "\n";
@@ -884,10 +884,10 @@ sub Tophat {
 	print TH "#SBATCH -C thin", "\n";
 	
 	if ($infile eq ( scalar( @{ $infiles{$_[0]} }) -2) ) {
-	    print TH "#SBATCH -t 60:00:00", "\n"; ##SBATCH -t 60:00:00", "\n";
+	    print TH "#SBATCH -t 60:00:00", "\n"; 
 	}
 	else {
-	    print TH "#SBATCH -t 30:00:00", "\n"; ##SBATCH -t 30:00:00", "\n";
+	    print TH "#SBATCH -t 30:00:00", "\n"; 
 	}
 	
 	print TH "#SBATCH -J TH", "$_[0]_",$k, "\n";
@@ -942,7 +942,8 @@ sub Tophat {
 	    $infile=$infile+1; #Compensate for printing two files in last sbatch script
 	    
 	    if ($pSTV eq 1) { #If run HTSeqCount
-		
+
+		print TH "cd /bubo/proj/$aid/private/", "\n\n"; #Required for next steps
 		$filename2 = "/bubo/proj/$aid/private/$ods/$_[0]/samtools/samtools_view_wf_$_[0].";
 		Checkfn2exists($filename2, $fnend);
 		print TH "sbatch $filename2","\n\n";
@@ -961,6 +962,7 @@ sub Tophat {
 	    
 	    if ($pSTV eq 1 && scalar( @{ $infiles{$_[0]} } ) < 2 ) { #If run samtools view and only 1 infile
 		
+		print TH "cd /bubo/proj/$aid/private/", "\n\n"; #Required for next steps
 		$filename2 = "/bubo/proj/$aid/private/$ods/$_[0]/samtools/samtools_view_wf_$_[0].";
 		Checkfn2exists($filename2, $fnend);
 		print TH "sbatch $filename2","\n\n";
@@ -970,11 +972,11 @@ sub Tophat {
 	    $k=$k+1; #Tracks nr of sbatch scripts
 	}
 	close(TH);
-	#my $ret = `sbatch $filename`;
-	#my ($jobID) = ($ret =~ /Submitted batch job (\d+)/);
-	#print STDERR "Sbatch script submitted, job id: $jobID\n";
-	#print STDERR "To check status of job, please run \'jobinfo -j $jobID\'\n";
-	#print STDERR "To check status of job, please run \'squeue -j $jobID\'\n";
+	my $ret = `sbatch $filename`;
+	my ($jobID) = ($ret =~ /Submitted batch job (\d+)/);
+	print STDERR "Sbatch script submitted, job id: $jobID\n";
+	print STDERR "To check status of job, please run \'jobinfo -j $jobID\'\n";
+	print STDERR "To check status of job, please run \'squeue -j $jobID\'\n";
     }
     
     return;
